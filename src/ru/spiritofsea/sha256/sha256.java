@@ -305,8 +305,15 @@ public class sha256 {
     }
 
     private String binToHex(String input) {
-        BigInteger temp = new BigInteger(input, 2);
-        return temp.toString(16).toUpperCase();
+        StringBuilder temp = new StringBuilder(input);
+        StringBuilder res = new StringBuilder();
+        while (temp.length() > 4) {
+            res.insert(0, Integer.toHexString(Integer.parseInt(temp.substring(temp.length()-4), 2)));
+            temp.delete(temp.length()-4, temp.length());
+        }
+        res.insert(0, Integer.toHexString(Integer.parseInt(temp.toString(), 2)));
+
+        return res.toString().toUpperCase();
     }
 
 }
