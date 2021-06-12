@@ -5,13 +5,26 @@ import java.nio.charset.StandardCharsets;
 
 public class sha256 {
 
-    private String inputInformation;
-    private String byteContent = "";
-    private int dataLength = 0;
+    private String hash, byteContent, inputLength;
     private String h0, h1, h2, h3, h4, h5, h6, h7;
+    private String[] inputBlocks = new String[512];
     private String[] consts;
-    private String[] wordList = new String[64];
-    private String hash = "";
+    private final String[] wordList = new String[64];
+    private int blockCounter = 0;
+
+    public void genSHA(String input) {
+        initializeHash();
+        this.inputLength = Long.toBinaryString(input.length() * 8);
+        formBlock(input);
+
+        for (int i = 0; i < this.blockCounter; i++) {
+            this.byteContent = this.inputBlocks[i];
+            createWordList();
+            fillWordList();
+            compress();
+        }
+
+    }
 
     private void initializeHash() {
         this.h0 = hexTo32Bin("6a09e667");
@@ -26,6 +39,58 @@ public class sha256 {
 
         for (int i = 0; i < consts.length; i++) {
             this.consts[i] = hexTo32Bin(this.consts[i]);
+        }
+    }
+
+    private void formBlock(String input) {
+        this.byteContent = asciiToByte(input);
+        int shift;
+        StringBuilder time = new StringBuilder(this.byteContent);
+
+        time.append("1");
+        shift = time.length() % 512;
+        if (shift < 448) {
+            time = new StringBuilder(fillZeroes(time.toString(), true, time.length() + (448 - shift)));
+            time.append(fillZeroes(this.inputLength, false, 64));
+        } else {
+            time = new StringBuilder(fillZeroes(time.toString(), true, time.length() + 512 - shift + 448));
+        }
+
+        time.append(fillZeroes(this.inputLength, false, 64));
+
+        while (time.length() >= 512) {
+            this.inputBlocks[this.blockCounter] = time.substring(0, 512);
+            time.replace(0, 512, "");
+            this.blockCounter++;
+        }
+
+    }
+
+    private void createWordList() {
+        StringBuilder time = new StringBuilder();
+
+        for (int i = 0; i < 16; i++) {
+            time.delete(0, time.length());
+            for (int a = 0; a < 32; a++) {
+                time.append(this.byteContent.charAt(a + 32 * i));
+            }
+            this.wordList[i] = time.toString();
+        }
+
+        for (int i = 16; i < 64; i++) {
+            this.wordList[i] = "00000000000000000000000000000000";
+        }
+
+    }
+
+    public void fillWordList() {
+        String s0;
+        String s1;
+
+        for (int i = 16; i < 64; i++) {
+            s0 = XOR(rightShift(this.wordList[i - 15], 3), XOR(rightRotate(this.wordList[i - 15], 18), rightRotate(this.wordList[i - 15], 7)));
+            s1 = XOR(rightShift(this.wordList[i - 2], 10), XOR(rightRotate(this.wordList[i - 2], 19), rightRotate(this.wordList[i - 2], 17)));
+            this.wordList[i] = ADD(ADD(this.wordList[i - 16], s0), ADD(this.wordList[i - 7], s1));
         }
     }
 
@@ -73,51 +138,17 @@ public class sha256 {
 
     }
 
-    private String hexTo32Bin(String input) {
-        return fillToSize(Long.toBinaryString(Long.parseLong(input.replaceAll("\\s*", ""), 16)), 32);
+    public String getHash() {
+        return this.hash;
     }
 
-    private String binToHex(String input) {
-        BigInteger temp = new BigInteger(input, 2);
-        return temp.toString(16).toUpperCase();
-    }
-
-    private String fillToSize(String input, int len) {
-        if (input.length() < len) {
-            input = fillZeroes(input, false, len);
-        } else if (input.length() > len) {
-            input = input.substring(input.length() - len);
+    private String fillTo32(String input) {         // Gets String, returns String which is filled with 0's to 32 sym.
+        if (input.length() < 32) {
+            input = fillZeroes(input, false, 32);
+        } else if (input.length() > 32) {
+            input = input.substring(input.length() - 32);
         }
         return input;
-    }
-
-    private String asciiToByte(String input) {
-
-        byte[] bytes = input.getBytes(StandardCharsets.US_ASCII);
-        StringBuilder binary = new StringBuilder();
-
-        for (byte b : bytes) {
-            int val = b;
-            for (int i = 0; i < 8; i++) {
-                binary.append((val & 128) == 0 ? 0 : 1);
-                val <<= 1;
-            }
-        }
-
-        return binary.toString();
-    }
-
-    private String setMarker(String input) {
-        return input + "10000000";
-    }
-
-    private void formBlock(String input) {
-        this.inputInformation = input;
-        this.byteContent = asciiToByte(input);
-        this.dataLength = this.byteContent.length();
-        this.byteContent = setMarker(this.byteContent);
-        this.byteContent = fillZeroes(this.byteContent, true, 448);
-        this.byteContent = this.byteContent + fillZeroes(Long.toBinaryString(this.dataLength), false, 64);
     }
 
     private String fillZeroes(String input, boolean mode, int len) {
@@ -136,37 +167,23 @@ public class sha256 {
         return rawBinary.toString();
     }
 
-    private void prettyBytePrint(String input) {
+    public void prettyBytePrint(String input) {
         int count = 0;
         StringBuilder outputString = new StringBuilder();
 
         while (count < input.length()) {
             if (count % 64 == 0 & count > 0) {
-                outputString.append("\n" + input.charAt(count));
-                count++;
+                outputString.append("\n").append(input.charAt(count));
             } else {
                 outputString.append(((count % 8) == 0 & count > 0) ? (" " + input.charAt(count)) : input.charAt(count));  // divide into 8 char blocks
-                count++;
             }
+            count++;
         }
+
+        System.out.println("\n" + outputString + "\n");
     }
 
-    private void createWordList() {
-        StringBuilder time = new StringBuilder();
-
-        for (int i = 0; i < 16; i++) {
-            time.delete(0, time.length());
-            for (int a = 0; a < 32; a++) {
-                time.append(this.byteContent.charAt(a + 32 * i));
-            }
-            this.wordList[i] = time.toString();
-        }
-
-        for (int i = 16; i < 64; i++) {
-            this.wordList[i] = "00000000000000000000000000000000";
-        }
-
-    }
+    // Math block below.
 
     private String rightRotate(String input, int shift) {
         StringBuilder time = new StringBuilder();
@@ -267,25 +284,29 @@ public class sha256 {
         return result.toString();
     }
 
-    public void fillWordList() {
-        String s0;
-        String s1;
+    private String asciiToByte(String input) {
 
-        for (int i = 16; i < 64; i++) {
-            s0 = XOR(rightShift(this.wordList[i - 15], 3), XOR(rightRotate(this.wordList[i - 15], 18), rightRotate(this.wordList[i - 15], 7)));
-            s1 = XOR(rightShift(this.wordList[i - 2], 10), XOR(rightRotate(this.wordList[i - 2], 19), rightRotate(this.wordList[i - 2], 17)));
-            this.wordList[i] = ADD(ADD(this.wordList[i - 16], s0), ADD(this.wordList[i - 7], s1));
+        byte[] bytes = input.getBytes(StandardCharsets.US_ASCII);
+        StringBuilder binary = new StringBuilder();
+
+        for (byte b : bytes) {
+            int val = b;
+            for (int i = 0; i < 8; i++) {
+                binary.append((val & 128) == 0 ? 0 : 1);
+                val <<= 1;
+            }
         }
+
+        return binary.toString();
     }
 
-    public void genSHA() {
-        initializeHash();
-        formBlock("hello world");
-        createWordList();
-        fillWordList();
-        compress();
+    private String hexTo32Bin(String input) {
+        return fillTo32(Long.toBinaryString(Long.parseLong(input.replaceAll("\\s*", ""), 16)));
+    }
 
-        System.out.println("\n\nSOURCE TEXT: " + this.inputInformation + "\nFINAL SHA256-HASH: " + this.hash);
+    private String binToHex(String input) {
+        BigInteger temp = new BigInteger(input, 2);
+        return temp.toString(16).toUpperCase();
     }
 
 }
