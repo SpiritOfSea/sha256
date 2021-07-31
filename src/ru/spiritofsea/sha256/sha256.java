@@ -5,17 +5,30 @@ import java.nio.charset.StandardCharsets;
 
 public class sha256 {
 
+    public enum Status {
+        SUCC,
+        FAIL,
+        INFO,
+        CRIT
+    }
+
     private String hash, byteContent, inputLength;
     private String h0, h1, h2, h3, h4, h5, h6, h7;
-    private String[] inputBlocks = new String[512];
+    private final String[] inputBlocks = new String[8192];
     private String[] consts;
+    private Boolean verbose = false;
     private final String[] wordList = new String[64];
     private int blockCounter = 0;
 
     public void genSHA(String input) {
+        vprint("String operating mode", Status.INFO);
         initializeHash();
-        this.inputLength = Long.toBinaryString(input.length() * 8);
-        formBlock(input);
+
+        this.inputLength = Long.toBinaryString(input.length() * 8L);
+        this.byteContent = asciiToByte(input);
+        vprint("Converted String to binary string", Status.SUCC);
+
+        formBlock();
 
         for (int i = 0; i < this.blockCounter; i++) {
             this.byteContent = this.inputBlocks[i];
@@ -24,6 +37,39 @@ public class sha256 {
             compress();
         }
 
+    }
+
+    public void genSHA(byte[] input) {
+        vprint("Binary operating mode", Status.INFO);
+        initializeHash();
+
+        StringBuilder build = new StringBuilder();
+        BigInteger time = new BigInteger(input);
+        build.append(time.toString(2));
+        while (build.length() % 8 != 0) {
+            build.insert(0, '0');
+        }
+        vprint("Converted Byte to binary string", Status.SUCC);
+
+        this.byteContent = build.toString();
+        this.inputLength = Long.toBinaryString(build.length());
+        formBlock();
+
+
+        for (int i = 0; i < this.blockCounter; i++) {
+            if (i % (this.blockCounter / 10) == 0) {
+                vprint("Proceeded " + i + " blocks ", Status.INFO);
+            }
+            this.byteContent = this.inputBlocks[i];
+            createWordList();
+            fillWordList();
+            compress();
+        }
+        vprint("SHA256 successfully generated.", Status.SUCC);
+    }
+
+    public void setVerbose(Boolean verb) {
+        this.verbose = verb;
     }
 
     private void initializeHash() {
@@ -40,10 +86,11 @@ public class sha256 {
         for (int i = 0; i < consts.length; i++) {
             this.consts[i] = hexTo32Bin(this.consts[i]);
         }
+        vprint("Hash initialized", Status.SUCC);
     }
 
-    private void formBlock(String input) {
-        this.byteContent = asciiToByte(input);
+    private void formBlock() {
+        vprint("Started to form blocks", Status.INFO);
         int shift;
         StringBuilder time = new StringBuilder(this.byteContent);
 
@@ -63,7 +110,13 @@ public class sha256 {
             time.replace(0, 512, "");
             this.blockCounter++;
         }
+        vprint("Successfully created " + this.blockCounter + " blocks", Status.SUCC);
+    }
 
+    private void vprint(String message, Status s) {
+        if (this.verbose) {
+            System.out.println("[" + s + "] " + message);
+        }
     }
 
     private void createWordList() {
